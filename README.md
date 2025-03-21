@@ -1,8 +1,5 @@
 # REST Client
 
-[![Open in Visual Studio Code](https://img.shields.io/static/v1?logo=visualstudiocode&label=&message=Open%20in%20Visual%20Studio%20Code&labelColor=2c2c32&color=007acc&logoColor=007acc)](https://open.vscode.dev/Huachao/vscode-restclient) [![Node CI](https://github.com/Huachao/vscode-restclient/workflows/Node%20CI/badge.svg?event=push)](https://github.com/Huachao/vscode-restclient/actions?query=workflow%3A%22Node+CI%22) [![Join the chat at https://gitter.im/Huachao/vscode-restclient](https://badges.gitter.im/Huachao/vscode-restclient.svg)](https://gitter.im/Huachao/vscode-restclient?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Marketplace Version](https://vsmarketplacebadges.dev/version-short/humao.rest-client.svg)](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) [![Downloads](https://vsmarketplacebadges.dev/downloads-short/humao.rest-client.svg
-)](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) [![Installs](https://vsmarketplacebadges.dev/installs-short/humao.rest-client.svg)](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) [![Rating](https://vsmarketplacebadges.dev/rating-short/humao.rest-client.svg)](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
-
 REST Client allows you to send HTTP request and view the response in Visual Studio Code directly. It eliminates the need for a separate tool to test REST APIs and makes API testing convenient and efficient.
 
 ## Main Features
@@ -463,6 +460,42 @@ A sample usage in `http` file for above environment variables is listed below, n
 GET https://{{host}}/api/{{version}}comments/1 HTTP/1.1
 Authorization: {{token}}
 ```
+### Auto Token Fetching With Environment switch
+REST Client supports automatic token fetching when switching environments. This can be configured using the `auto_fetch_token_data` property in your environment settings:
+
+```json
+"rest-client.environmentVariables": {
+    "$shared": {},
+    "development": {
+        "host": "dev.example.com",
+        "auto_fetch_token_data": {
+            "client_id_variable_name": "CLIENT_ID",
+            "client_secret_variable_name": "CLIENT_SECRET",
+            "auth_type": "Basic",
+            "method": "POST",
+            "token_request_url": "https://auth.example.com/token",
+            "content_type": "application/x-www-form-urlencoded",
+            "grant_type": "client_credentials",
+            "scope": "api.access",
+            "response_token_value_tag_name": "access_token"
+        }
+    }
+}
+```
+
+The `auto_fetch_token_data` configuration requires:
+- `client_id_variable_name`: Name of the variable in .env file containing client ID
+- `client_secret_variable_name`: Name of the variable in .env file containing client secret
+- `auth_type`: Authentication type (e.g., "Basic", "Bearer")
+- `method`: HTTP method for token request
+- `token_request_url`: URL endpoint for token requests
+- `response_token_value_tag_name`: JSON path to token value in response
+
+When switching to an environment with `auto_fetch_token_data` configured:
+1. The extension checks for a .env file in the same directory as your .http file
+2. Reads the client credentials from .env file
+3. Makes a token request to the specified endpoint
+4. Stores the received token in the $shared environment as "token"
 
 #### File Variables
 For file variables, the definition follows syntax __`@variableName = variableValue`__ which occupies a complete line. And variable name __MUST NOT__ contain any spaces. As for variable value, it can consist of any characters, even whitespaces are allowed for them (leading and trailing whitespaces will be trimmed). If you want to preserve some special characters like line break, you can use the _backslash_ `\` to escape, like `\n`. File variable value can even contain references to all of other kinds of variables. For instance, you can create a file variable with value of other [request variables](#request-variables) like `@token = {{loginAPI.response.body.token}}`. When referencing a file variable, you can use the _percent_ `%` to percent-encode the value.
