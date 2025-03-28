@@ -94,6 +94,11 @@
         "category": "Rest Client"
       },
       {
+        "command": "rest-client.run-http-test",
+        "title": "Run HTTP Test",
+        "category": "Rest Client"
+      },
+      {
         "command": "rest-client.history",
         "title": "View Request History",
         "category": "Rest Client"
