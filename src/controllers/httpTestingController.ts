@@ -6,10 +6,13 @@ import * as Constants from '../common/constants';
 import { QuickPickItem } from 'vscode';
 import { SystemSettings } from '../models/configurationSettings';
 import { UserDataManager } from '../utils/userDataManager';
+import { initLogger, log } from "../utils/logger";
+import { LogLevel } from "../types";
 
 type EnvironmentPickItem = QuickPickItem & { name: string };
 
 export class HttpTestingController {
+    
     private static readonly noEnvironmentPickItem: EnvironmentPickItem = {
         label: 'No Environment',
         name: Constants.NoEnvironmentSelectedName,
@@ -22,10 +25,20 @@ export class HttpTestingController {
         delete filtered.auto_fetch_token_data;
         return filtered;
     }
+
+    // Create output channel
+    private static readonly outputChannel = vscode.window.createOutputChannel('REST Client');
+
+    constructor() {
+        // Initialize logger with the output channel
+        initLogger(HttpTestingController.outputChannel);
+    }
+
     @trace('HTTP Testing')
     public async runHttpTest() {
         const activeEditor = vscode.window.activeTextEditor;
         if (!activeEditor) {
+            log('No active editor found.', LogLevel.ERROR);
             vscode.window.showErrorMessage('No active editor found.');
             return;
         }
@@ -34,13 +47,17 @@ export class HttpTestingController {
         const fileName = document.fileName;
 
         if (!fileName.endsWith('.http')) {
+            log('The active file is not an .http file.', LogLevel.ERROR);
             vscode.window.showErrorMessage('The active file is not an .http file.');
             return;
         }
 
         try {
+            log('Creating variables.json...', LogLevel.INFO);
+            
             // Get current environment
             const currentEnvironment = await HttpTestingController.getCurrentEnvironment();
+            log(`Current environment: ${currentEnvironment.name}`, LogLevel.INFO);
 
             // Merge $shared and current environment variables, excluding auto_fetch_token_data
             const sharedVars = this.filterEnvironmentVars(this.settings.environmentVariables['$shared'] || {});
@@ -61,21 +78,12 @@ export class HttpTestingController {
                 JSON.stringify(combinedVars, null, 2),
                 'utf8'
             );
+            log(`Variables written to: ${variablesPath}`, LogLevel.INFO);
 
-            // Try to find existing HTTP Test terminal
-            let terminal = vscode.window.terminals.find(t => t.name === 'HTTP Test');
-
-            if (terminal) {
-                terminal.show();
-                terminal.sendText('cls', true); // Use 'clear' for non-Windows
-                terminal.sendText(`http-test "${fileName}"`, true);
-            } else {
-                terminal = vscode.window.createTerminal('HTTP Test');
-                terminal.show();
-                terminal.sendText(`http-test "${fileName}"`, true);
-            }
+            log("Starting test run...", LogLevel.INFO);
 
         } catch (error) {
+            log(`Failed to create variables.json: ${error instanceof Error ? error.message : String(error)}`, LogLevel.ERROR);
             vscode.window.showErrorMessage(`Failed to create variables.json: ${error instanceof Error ? error.message : String(error)}`);
             return;
         }
