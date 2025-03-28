@@ -7,12 +7,17 @@ import { QuickPickItem } from 'vscode';
 import { SystemSettings } from '../models/configurationSettings';
 import { UserDataManager } from '../utils/userDataManager';
 import { initLogger, log } from "../utils/logger";
-import { LogLevel } from "../types";
+import { fileExists, loadVariables } from "../utils/fileUtils";
+import { LogLevel, HttpRequest } from "../types";
+import { VariableManager } from "../http-test-core/VariableManager";
+import { HttpFileParser } from "../http-test-core/HttpFileParser";
+import { TestManager } from "../http-test-core/TestManager";
+
 
 type EnvironmentPickItem = QuickPickItem & { name: string };
 
 export class HttpTestingController {
-    
+
     private static readonly noEnvironmentPickItem: EnvironmentPickItem = {
         label: 'No Environment',
         name: Constants.NoEnvironmentSelectedName,
@@ -28,6 +33,7 @@ export class HttpTestingController {
 
     // Create output channel
     private static readonly outputChannel = vscode.window.createOutputChannel('REST Client');
+    
 
     constructor() {
         // Initialize logger with the output channel
@@ -36,6 +42,9 @@ export class HttpTestingController {
 
     @trace('HTTP Testing')
     public async runHttpTest() {
+        
+        // Ensure output is visible
+        HttpTestingController.outputChannel.show(true);
         const activeEditor = vscode.window.activeTextEditor;
         if (!activeEditor) {
             log('No active editor found.', LogLevel.ERROR);
@@ -54,13 +63,17 @@ export class HttpTestingController {
 
         try {
             log('Creating variables.json...', LogLevel.INFO);
-            
+
             // Get current environment
             const currentEnvironment = await HttpTestingController.getCurrentEnvironment();
             log(`Current environment: ${currentEnvironment.name}`, LogLevel.INFO);
 
             // Merge $shared and current environment variables, excluding auto_fetch_token_data
             const sharedVars = this.filterEnvironmentVars(this.settings.environmentVariables['$shared'] || {});
+            const options = {
+                verbose: sharedVars.http_test_output_verbose
+            };
+    
             const currentEnvVars = currentEnvironment.name !== Constants.NoEnvironmentSelectedName
                 ? this.filterEnvironmentVars(this.settings.environmentVariables[currentEnvironment.name] || {})
                 : {};
@@ -81,8 +94,22 @@ export class HttpTestingController {
             log(`Variables written to: ${variablesPath}`, LogLevel.INFO);
 
             log("Starting test run...", LogLevel.INFO);
+            const variableManager = new VariableManager();
+            await this.loadVariablesFile(variableManager, fileName, undefined);
+            const httpFileParser = new HttpFileParser(variableManager);
+            const requests: HttpRequest[] = await httpFileParser.parse(fileName);
+            const testManager = new TestManager(fileName);
+            const results = await testManager.run(requests, options);
+
+            const failedTests = results.filter((result) => !result.passed);
+            if (failedTests.length > 0) {
+                log(`${failedTests.length} test(s) failed.`, LogLevel.ERROR);
+            } else {
+                log(`All tests passed successfully.`, LogLevel.INFO);
+            }
 
         } catch (error) {
+            HttpTestingController.outputChannel.show(true); // Make sure errors are visible
             log(`Failed to create variables.json: ${error instanceof Error ? error.message : String(error)}`, LogLevel.ERROR);
             vscode.window.showErrorMessage(`Failed to create variables.json: ${error instanceof Error ? error.message : String(error)}`);
             return;
@@ -96,5 +123,21 @@ export class HttpTestingController {
     private static async getCurrentEnvironment(): Promise<EnvironmentPickItem> {
         const currentEnvironment = await UserDataManager.getEnvironment() as EnvironmentPickItem | undefined;
         return currentEnvironment || this.noEnvironmentPickItem;
+    }
+
+    private async loadVariablesFile(
+        variableManager: VariableManager,
+        filePath: string,
+        varFile: string | undefined
+    ): Promise<void> {
+        const variableFile =
+            varFile || path.join(path.dirname(filePath), "variables.json");
+        if (await fileExists(variableFile)) {
+            log(`Loading variables from ${variableFile}`, LogLevel.INFO);
+            const variables = await loadVariables(variableFile);
+            variableManager.setVariables(variables);
+        } else {
+            log(`No variable file specified or found. Proceeding without external variables.`, LogLevel.INFO);
+        }
     }
 }
