@@ -239,7 +239,7 @@ export class Selector {
 
     private static getDelimiterRows(lines: string[]): number[] {
         return Object.entries(lines)
-            .filter(([, value]) => /^#{3,}/.test(value))
+            .filter(([, value]) => /^###$/.test(value.trim()))  // Changed regex to match exactly 3 #
             .map(([index, ]) => +index);
     }
 
