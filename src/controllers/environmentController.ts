@@ -100,23 +100,28 @@ export class EnvironmentController {
             if (!this.settings.environmentVariables[EnvironmentController.sharedEnvironmentName]) {
                 this.settings.environmentVariables[EnvironmentController.sharedEnvironmentName] = {};
             }
-            
+
             this.settings.environmentVariables[EnvironmentController.sharedEnvironmentName].token = token;
-            
-            // Update settings
+
+            // Check if workspace exists and has settings
+            const workspaceConfig = vscode.workspace.getConfiguration('rest-client');
+            const hasWorkspaceConfig = workspaceConfig.inspect('environmentVariables')?.workspaceValue !== undefined;
+
+            // Update settings at workspace level if available, otherwise fallback to global
             await vscode.workspace.getConfiguration().update(
                 'rest-client.environmentVariables',
                 this.settings.environmentVariables,
-                vscode.ConfigurationTarget.Global
+                hasWorkspaceConfig ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global
             );
-    
-            console.log(`Token updated in $shared environment variables`);
+
+            const scope = hasWorkspaceConfig ? 'workspace' : 'global';
+            console.log(`Token updated in $shared environment variables (${scope} scope)`);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to update token in shared environment: ${error}`);
         }
     }
 
-    private  getNestedValue(obj: any, path: string[]): any {
+    private getNestedValue(obj: any, path: string[]): any {
         return path.reduce((acc, key) => acc && acc[key], obj);
     }
 
@@ -132,7 +137,7 @@ export class EnvironmentController {
             vscode.window.showErrorMessage('Please open a .http file to continue');
             return '';
         }
-    
+
         const envFilePath = path.join(path.dirname(activeEditor.document.fileName), `.env`);
         let clientId: string | undefined;
         let clientSecret: string | undefined;
@@ -141,18 +146,18 @@ export class EnvironmentController {
             vscode.window.showErrorMessage(`client_id_variable_name and client_secret_variable_name must configured in settings.`);
             return '';
         }
-    
+
         try {
             if (fs.existsSync(envFilePath)) {
                 const envContent = await fs.promises.readFile(envFilePath, 'utf8');
                 const lines = envContent.split('\n');
-                
+
                 for (const line of lines) {
                     const [key, value] = line.split('=').map(part => part.trim());
                     if (key === autoFetchTokenData.client_id_variable_name) clientId = value;
                     if (key === autoFetchTokenData.client_secret_variable_name) clientSecret = value;
                 }
-            }else {
+            } else {
                 // Create new .env file if it doesn't exist
                 await fs.promises.writeFile(envFilePath, '', { flag: 'w' });
                 vscode.window.showInformationMessage('Created new .env file. Please add your client credentials.');
@@ -162,13 +167,13 @@ export class EnvironmentController {
             vscode.window.showErrorMessage(`auto_fetch_token_data is configured for environment but there is no .env created adjacent to this http file.`);
             return '';
         }
-    
+
         if (!clientId || !clientSecret) {
-            vscode.window.showErrorMessage(`${autoFetchTokenData.client_id_variable_name } and ${autoFetchTokenData.client_secret_variable_name } must be defined in .env.`);
+            vscode.window.showErrorMessage(`${autoFetchTokenData.client_id_variable_name} and ${autoFetchTokenData.client_secret_variable_name} must be defined in .env.`);
             return '';
         }
         const encodedCredentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-    
+
         const headers: any = {
             'Authorization': `${autoFetchTokenData['auth_type']} ${encodedCredentials}`
         };
@@ -182,14 +187,14 @@ export class EnvironmentController {
         if (autoFetchTokenData['scope']) {
             body.append('scope', autoFetchTokenData['scope']);
         }
-    
+
         const tokenExpression = autoFetchTokenData['response_token_value_tag_name'];
-    
+
         if (!tokenExpression) {
             vscode.window.showErrorMessage(`response_token_value_tag_name is missing in settings for ${environmentName} where auto_fetch_token_data is configured`);
             return '';
         }
-    
+
         try {
             const method = autoFetchTokenData['method'];
             if (!method) {
@@ -199,14 +204,14 @@ export class EnvironmentController {
             if (!token_request_url) {
                 throw new Error('token_request_url is missing in settings');
             }
-    
+
             const response = await fetch(token_request_url, {
                 method: method,
                 headers: headers,
                 body: body
             });
             const data = await response.json();
-    
+
             if (typeof data === 'object' && data !== null) {
                 const token = this.getNestedValue(data, tokenExpression.split("."));
                 if (token) {

@@ -7,7 +7,6 @@ import { QuickPickItem } from 'vscode';
 import { SystemSettings } from '../models/configurationSettings';
 import { UserDataManager } from '../utils/userDataManager';
 import { initLogger, log } from "../utils/logger";
-import { fileExists, loadVariables } from "../utils/fileUtils";
 import { LogLevel, HttpRequest } from "../types";
 import { VariableManager } from "../http-test-core/VariableManager";
 import { HttpFileParser } from "../http-test-core/HttpFileParser";
@@ -95,7 +94,7 @@ export class HttpTestingController {
 
             log("Starting test run...", LogLevel.INFO);
             const variableManager = new VariableManager();
-            await this.loadVariablesFile(variableManager, fileName, undefined);
+            await this.loadVariablesFile(variableManager, currentEnvironment);
             const httpFileParser = new HttpFileParser(variableManager);
             const requests: HttpRequest[] = await httpFileParser.parse(fileName);
             const testManager = new TestManager(fileName);
@@ -127,17 +126,28 @@ export class HttpTestingController {
 
     private async loadVariablesFile(
         variableManager: VariableManager,
-        filePath: string,
-        varFile: string | undefined
+        currentEnvironment: EnvironmentPickItem
     ): Promise<void> {
-        const variableFile =
-            varFile || path.join(path.dirname(filePath), "variables.json");
-        if (await fileExists(variableFile)) {
-            log(`Loading variables from ${variableFile}`, LogLevel.INFO);
-            const variables = await loadVariables(variableFile);
+        try {
+            // Get shared and current environment variables
+            const sharedVars = this.filterEnvironmentVars(this.settings.environmentVariables['$shared'] || {});
+            const currentEnvVars = currentEnvironment.name !== Constants.NoEnvironmentSelectedName
+                ? this.filterEnvironmentVars(this.settings.environmentVariables[currentEnvironment.name] || {})
+                : {};
+    
+            // Combine variables with current environment taking precedence
+            const variables = {
+                ...sharedVars,
+                ...currentEnvVars
+            };
+    
+            // Set variables in manager
             variableManager.setVariables(variables);
-        } else {
-            log(`No variable file specified or found. Proceeding without external variables.`, LogLevel.INFO);
+            log(`Loaded ${Object.keys(variables).length} variables from environment`, LogLevel.INFO);
+    
+        } catch (error) {
+            log(`Failed to load environment variables: ${error instanceof Error ? error.message : String(error)}`, LogLevel.ERROR);
+            throw error;
         }
     }
 }
