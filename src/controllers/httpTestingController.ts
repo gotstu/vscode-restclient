@@ -69,8 +69,10 @@ export class HttpTestingController {
 
             // Merge $shared and current environment variables, excluding auto_fetch_token_data
             const sharedVars = this.filterEnvironmentVars(this.settings.environmentVariables['$shared'] || {});
+            const workspaceConfig = vscode.workspace.getConfiguration('rest-client');
+            
             const options = {
-                verbose: sharedVars.http_test_output_verbose
+                verbose: workspaceConfig.httpTestVerboseOutput ? workspaceConfig.httpTestVerboseOutput : false
             };
     
             const currentEnvVars = currentEnvironment.name !== Constants.NoEnvironmentSelectedName
