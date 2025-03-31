@@ -1,6 +1,6 @@
-# REST Client with HTTP TEST
+# REST Client with __HTTP TEST!__
 
-REST Client allows you to send HTTP request and view the response in Visual Studio Code directly. It eliminates the need for a separate tool to test REST APIs and makes API testing convenient and efficient. It also allows you to execute the HTTP file as an HTTP test.
+REST Client allows you to send HTTP request and view the response in Visual Studio Code directly. It eliminates the need for a separate tool to test REST APIs and makes API testing convenient and efficient. __NEW!__ It also allows you to execute the HTTP file as an HTTP test.
 
 ## Main Features
 * Send/Cancel/Rerun __HTTP request__ in editor and view response in a separate pane with syntax highlight
@@ -14,7 +14,7 @@ REST Client allows you to send HTTP request and view the response in Visual Stud
 * Customize font(size/family/weight) in response preview
 * Preview response with expected parts(_headers only_, _body only_, _full response_ and _both request and response_)
 * Authentication support for:
-    - Basic Auth(Auto Fetch Token Support) NEW!
+    - Basic Auth(Auto Fetch Token Support) __NEW!__
     - Digest Auth
     - SSL Client Certificates
     - Azure Active Directory
@@ -59,29 +59,39 @@ REST Client allows you to send HTTP request and view the response in Visual Stud
     - CodeLens support to add an actionable link to send request
     - Fold/Unfold for request block
 * Support for Markdown fenced code blocks with either `http` or `rest`
+* __NEW!__ - Run HTTP Test for complete http file with basic and custom assertions. See [HTTP Testing Support](#-HTTP-Testing-Support)
 
-### Example Configuration for OAuth2 Client Credentials Flow
-Here's a complete example for setting up automatic token fetching using OAuth2 client credentials flow:
+### Auto Token Fetching With Environment switch
+REST Client supports automatic token fetching when switching environments. This can be configured using the `auto_fetch_token_data` property in your environment settings:
 
 ```json
 "rest-client.environmentVariables": {
     "$shared": {},
-    "qa": {
-        "host": "api.qa.se.com",
+    "development": {
+        "host": "dev.example.com",
         "auto_fetch_token_data": {
-            "method": "POST",
-            "token_request_url": "https://api.qa.se.com/token",
-            "auth_type": "Basic",
-            "grant_type": "client_credentials",
-            "content_type": "application/x-www-form-urlencoded",
-            "response_token_value_tag_name": "access_token",
             "client_id_variable_name": "CLIENT_ID",
-            "client_secret_variable_name": "CLIENT_SECRET"
+            "client_secret_variable_name": "CLIENT_SECRET",
+            "auth_type": "Basic",
+            "method": "POST",
+            "token_request_url": "https://auth.example.com/token",
+            "content_type": "application/x-www-form-urlencoded",
+            "grant_type": "client_credentials",
+            "scope": "api.access",
+            "response_token_value_tag_name": "access_token"
         }
     }
 }
 ```
 
+The `auto_fetch_token_data` configuration requires:
+- `client_id_variable_name`: Name of the variable in .env file containing client ID
+- `client_secret_variable_name`: Name of the variable in .env file containing client secret
+- `auth_type`: Authentication type (e.g., "Basic", "Bearer")
+- `method`: HTTP method for token request
+- `token_request_url`: URL endpoint for token requests
+- `response_token_value_tag_name`: JSON path to token value in response
+  
 This configuration:
 - Uses OAuth2 client credentials flow
 - Makes a POST request to token_request_url value endpoint
@@ -94,11 +104,16 @@ This configuration:
 - Extracts token from response using "access_token" JSON path
 - Stores token in `$shared` environment as "token"
 
+When switching to an environment with `auto_fetch_token_data` configured:
+1. The extension checks for a .env file in the same directory as your .http file
+2. Reads the client credentials from .env file
+3. Makes a token request to the specified endpoint
+4. Stores the received token in the $shared environment as "token"
+   
 You can then use the token in your requests:
 ```http
 GET https://{{host}}/api/v1/data
 Authorization: Bearer {{token}}
-```
 
 ## Usage
 In editor, type an HTTP request as simple as below:
@@ -501,42 +516,6 @@ A sample usage in `http` file for above environment variables is listed below, n
 GET https://{{host}}/api/{{version}}comments/1 HTTP/1.1
 Authorization: {{token}}
 ```
-### Auto Token Fetching With Environment switch
-REST Client supports automatic token fetching when switching environments. This can be configured using the `auto_fetch_token_data` property in your environment settings:
-
-```json
-"rest-client.environmentVariables": {
-    "$shared": {},
-    "development": {
-        "host": "dev.example.com",
-        "auto_fetch_token_data": {
-            "client_id_variable_name": "CLIENT_ID",
-            "client_secret_variable_name": "CLIENT_SECRET",
-            "auth_type": "Basic",
-            "method": "POST",
-            "token_request_url": "https://auth.example.com/token",
-            "content_type": "application/x-www-form-urlencoded",
-            "grant_type": "client_credentials",
-            "scope": "api.access",
-            "response_token_value_tag_name": "access_token"
-        }
-    }
-}
-```
-
-The `auto_fetch_token_data` configuration requires:
-- `client_id_variable_name`: Name of the variable in .env file containing client ID
-- `client_secret_variable_name`: Name of the variable in .env file containing client secret
-- `auth_type`: Authentication type (e.g., "Basic", "Bearer")
-- `method`: HTTP method for token request
-- `token_request_url`: URL endpoint for token requests
-- `response_token_value_tag_name`: JSON path to token value in response
-
-When switching to an environment with `auto_fetch_token_data` configured:
-1. The extension checks for a .env file in the same directory as your .http file
-2. Reads the client credentials from .env file
-3. Makes a token request to the specified endpoint
-4. Stores the received token in the $shared environment as "token"
 
 #### File Variables
 For file variables, the definition follows syntax __`@variableName = variableValue`__ which occupies a complete line. And variable name __MUST NOT__ contain any spaces. As for variable value, it can consist of any characters, even whitespaces are allowed for them (leading and trailing whitespaces will be trimmed). If you want to preserve some special characters like line break, you can use the _backslash_ `\` to escape, like `\n`. File variable value can even contain references to all of other kinds of variables. For instance, you can create a file variable with value of other [request variables](#request-variables) like `@token = {{loginAPI.response.body.token}}`. When referencing a file variable, you can use the _percent_ `%` to percent-encode the value.
@@ -782,7 +761,7 @@ headers  | Only the response headers(including _status line_) are previewed
 body     | Only the response body is previewed
 exchange | Preview the whole HTTP exchange(request and response)
 
-## HTTP Testing Support
+### HTTP Testing Support
 REST Client includes built-in HTTP testing capabilities that allow you to write and execute API tests directly in your `.http` files. This feature helps you validate API responses without writing complex test scripts.
 
 ### Writing Tests
