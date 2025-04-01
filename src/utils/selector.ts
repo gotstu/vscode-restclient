@@ -128,7 +128,13 @@ export class Selector {
         for (const current of delimitedLines) {
             let start = prev + 1;
             let end = current - 1;
+            let lineCounter = 0;
             while (start <= end) {
+                lineCounter++;
+                if (lines[lineCounter].substring(0,4) === '####') {
+                    requestRanges.push([start, lineCounter-1]);
+                    break;
+                }
                 const startLine = lines[start];
                 if (options.ignoreResponseRange && this.isResponseStatusLine(startLine)) {
                     break;
@@ -147,7 +153,7 @@ export class Selector {
                     end--;
                     continue;
                 }
-
+                
                 requestRanges.push([start, end]);
                 break;
             }
